@@ -36,10 +36,15 @@ modules:
   - name: godot
     buildsystem: simple
     build-options:
+      append-path: /app/bin
       arch:
         x86_64:
           env:
             SCONS_FLAGS_EXTRA: use_lto=yes
+            TEMPLATE: linux_release.x86_64
+        aarch64:
+          env:
+            TEMPLATE: linux_release.arm64
       env:
         SCONS_FLAGS: >
           platform=linuxbsd
@@ -61,15 +66,10 @@ modules:
           builtin_sdl=no
 
     build-commands:
-      - python3 /app/bin/scons $SCONS_FLAGS $SCONS_FLAGS_EXTRA target=editor -j "$FLATPAK_BUILDER_N_JOBS"
+      - scons $SCONS_FLAGS $SCONS_FLAGS_EXTRA target=editor -j "$FLATPAK_BUILDER_N_JOBS"
       - install -D -m755 bin/godot.linuxbsd.editor.* /app/bin/godot
-      - python3 /app/bin/scons $SCONS_FLAGS $SCONS_FLAGS_EXTRA target=template_release tools=no -j "$FLATPAK_BUILDER_N_JOBS"
-      - |
-        if [ "$FLATPAK_ARCH" = "x86_64" ]; then
-          install -Dm755 bin/godot.linuxbsd.template_release.* /app/share/godot/export_templates/4.6.3.stable/linux_release.x86_64
-        else 
-          install -Dm755 bin/godot.linuxbsd.template_release.* /app/share/godot/export_templates/4.6.3.stable/linux_release.arm64
-        fi
+      - scons $SCONS_FLAGS $SCONS_FLAGS_EXTRA target=template_release tools=no -j "$FLATPAK_BUILDER_N_JOBS"
+      - install -Dm755 bin/godot.linuxbsd.template_release.* /app/share/godot/export_templates/4.6.3.stable/${TEMPLATE}
     cleanup: ["*"]
     sources:
       - type: archive
@@ -82,26 +82,15 @@ modules:
       # we need to do this, since godot only supports export templates in XDG_DATA_HOME & ~/.local/share
       env:
         XDG_DATA_HOME: /app/share/
+      arch:
+        x86_64:
+          env:
+            TARGET: Linux-x86_64
+        aarch64:
+          env:
+            TARGET: Linux-arm64
     build-commands:
-      - cp Mods/MediaPipe/_tracker/Project/requirements.txt addons/KiriPythonRPCWrapper/Wheels
-      - godot --disable-render-loop --no-header --headless --script Build/WriteBuildVars.gd
-      - . Build/build_vars.sh godot --headless --path . --import
-      - |
-        . Build/build_vars.sh godot
-        if [ "$FLATPAK_ARCH" = "x86_64" ]; then
-          godot --headless --path . --export-release "Linux-x86_64" Build/Builds/snekstudio
-        else
-          godot --headless --path . --export-release "Linux-arm64" Build/Builds/snekstudio
-        fi
-      - |
-        install -Dm755 snekstudio-runner.sh ${FLATPAK_DEST}/bin/snekstudio-runner
-        cd Build/Builds/
-        install -Dm755 snekstudio -t ${FLATPAK_DEST}/bin/
-        install -Dm644 snekstudio.pck -t ${FLATPAK_DEST}/bin/
-        mkdir -p ${FLATPAK_DEST}/share/SnekStudio
-        cp -r Mods ${FLATPAK_DEST}/share/SnekStudio
-        cp -r SampleModels ${FLATPAK_DEST}/share/SnekStudio
-        rm -r ${FLATPAK_DEST}/share/SnekStudio/{logs,objectdb_snapshots}
+      - ./build.sh
     post-install:
       - mkdir -p ${FLATPAK_DEST}/user-mods
       - install -D flatpak/com.snekstudio.Snekstudio.desktop -t  /app/share/applications/
@@ -122,6 +111,8 @@ modules:
           url: https://api.github.com/repos/ExpiredPopsicle/SnekStudio/releases/latest
           tag-query: ".tag_name"
       - ./python3-requirements.json
+      - type: file
+        path: build.sh
       - type: file
         url: "https://github.com/indygreg/python-build-standalone/releases/download/20240814/cpython-3.12.5%2B20240814-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz"
         sha256: 10680b593b5e31833218fd83104dee74af970a3463403a22bae613b952a34e8d
